@@ -1,5 +1,4 @@
-# config: UTF-8
-
+# coding: UTF-8
 import hashlib
 import json
 from time import time
