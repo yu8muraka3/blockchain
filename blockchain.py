@@ -14,19 +14,19 @@ class Blockchain:
         self.difficulty = "0000"
         self.nodes = set()
         # ジェネシスブロックを作る
-        self.new_block(previous_hash=1, proof=100)
+        self.new_block(previous_hash=1, nonce=0, merkle_root_hash=1)
 
     def register_node(self, address):
         parsed_url = urlparse(address)
         self.nodes.add(parsed_url.netloc)
 
 
-    def new_block(self, proof, previous_hash=None):
+    def new_block(self, nonce=0, previous_hash=None, merkle_root_hash=None):
         # 新しいブロックを作り、チェーンに加える
         """
         ブロックチェーンに新しいブロックを作る
-        :param proof: <int> プルーフ・オブ・ワークアルゴリズムから得られるプルーフ
         :param previous_hash: (オプション) <str> 前のブロックのハッシュ
+        :param merkle_root_hash: <str> トランザクションのマークルルートハッシュ
         :return: <dict> 新しいブロック
         """
 
@@ -34,19 +34,58 @@ class Blockchain:
             'index': len(self.chain) + 1,
             'timestamp': time(),
             'transactions': self.current_transactions,
-            'proof': proof,
+            'nonce': nonce,
             'previous_hash': previous_hash or self.hash(self.chain[-1]),
+            'merkle_root_hash': merkle_root_hash or self.merkle_root(self.current_transactions)
         }
 
+        block['nonce'] = self.proof_of_work(block)
+        self.chain.append(block)
         # 現在のトランザクションリストをリセット
         self.current_transactions = []
-        self.chain.append(block)
 
         return block
 
+    @staticmethod
+    def dhash(data):
+        encoded_data = data.encode()
+        hash_data = str(hashlib.sha256(encoded_data).hexdigest()).encode()
+        return hashlib.sha256(hash_data).hexdigest()
+
+    @staticmethod
+    def extract_txid(nodes):
+        if nodes[0].__class__.__name__ == "dict":
+            txid_nodes = []
+            for node in nodes:
+                txid_nodes.append(node['txid'])
+            return txid_nodes
+        else:
+            return nodes
 
 
-    def new_transaction(self, sender, recipient, amount):
+    def merkle_root(self, nodes):
+        nodes = self.extract_txid(nodes)
+        print(len(nodes))
+        if len(nodes) == 1:
+            if len(self.current_transactions) == 1:
+                mRoot = self.dhash(nodes[0])
+            else:
+                mRoot = nodes[0]
+            return mRoot
+        else:
+            upper_nodes = []
+            for x in range(0, len(nodes), 2):
+                if len(nodes) % 2 != 0 and x == (len(nodes)-1):
+                    join_nodes = str(nodes[x]) + str(nodes[x])
+                    upper_nodes.append(self.dhash(join_nodes))
+                else:
+                    join_nodes = str(nodes[x]) + str(nodes[x+1])
+                    upper_nodes.append(self.dhash(join_nodes))
+            print(upper_nodes)
+            return self.merkle_root(upper_nodes)
+
+
+    def new_transaction(self, sender, recipient, amount, transaction_id):
         # 新しいトランザクションをリストに加える
         """
         次に採掘されるブロックに加える新しいトランザクションを作る
@@ -56,11 +95,16 @@ class Blockchain:
         :return: <int> このトランザクションを含むブロックのアドレス
         """
 
-        self.current_transactions.append({
+        transaction = {
+            'txid': transaction_id,
             'sender': sender,
             'recipient': recipient,
             'amount': amount
-        })
+        }
+
+        transaction['txid'] = self.hash(transaction)
+
+        self.current_transactions.append(transaction)
 
         return self.last_block['index'] + 1
 
@@ -84,18 +128,12 @@ class Blockchain:
 
 
 
-    def proof_of_work(self, last_proof):
-        """
-        シンプルなプルーフ・オブ・ワークのアルゴリズム:
-         - hash(pp') の最初の4つが0となるような p' を探す
-         - p は前のプルーフ、 p' は新しいプルーフ
-        :param last_proof: <int>
-        :return: <int>
-        """
-        proof = 0
-        while self.valid_proof(last_proof, proof) is False:
-            proof += 1
-        return proof
+    def proof_of_work(self, block):
+        nonce = 0
+        while self.valid_proof(block, nonce) is False:
+            nonce += 1
+
+        return nonce
 
     def change_difficulty(self):
         recent_blocks = blockchain.chain[-5:]
@@ -106,29 +144,31 @@ class Blockchain:
         while i < 4:
             recent_generate_blocktime += (recent_blocks[i+1]['timestamp'] - recent_blocks[i]['timestamp'])
             i += 1
-        average_time = recent_generate_blocktime / len(recent_blocks)
+        average_time = recent_generate_blocktime / (len(recent_blocks) - 1)
 
         if average_time > 10:
-            self.difficulty.rstrip("0")
+            self.difficulty = self.difficulty[1:]
         elif average_time < 10:
             self.difficulty += "0"
 
-        print(blockchain.difficulty)
+        print("\n----------------\n")
+        print("Ajust difficulty...\n")
+        print(f'Now difficulty is {blockchain.difficulty}')
+        print("\n----------------\n")
         return blockchain.difficulty
 
-    @staticmethod
-    def valid_proof(last_proof, proof):
+
+    def valid_proof(self, block, nonce):
         """
         プルーフが正しいかを確認する: hash(last_proof, proof)の最初の4つが0となっているか？
         :param last_proof: <int> 前のプルーフ
         :param proof: <int> 現在のプルーフ
         :return: <bool> 正しければ true 、そうでなれけば false
         """
+        block['nonce'] = nonce
+        guess_hash = self.hash(block)
 
-        guess = f'{last_proof}{proof}'.encode()
-        guess_hash = hashlib.sha256(guess).hexdigest()
-
-        return guess_hash[:len(blockchain.difficulty)] == blockchain.difficulty
+        return guess_hash[:len(self.difficulty)] == self.difficulty
 
     def valid_chain(self, chain):
         last_block = chain[0]
@@ -193,8 +233,10 @@ def new_transactions():
     if not all(k in values for k in required):
         return 'Missing values', 400
 
-        # 新しいトランザクションを作る
-    index = blockchain.new_transaction(values['sender'], values['recipient'], values['amount'])
+    # 新しいトランザクションを作る
+    txid = len(blockchain.current_transactions) + 1
+    index = blockchain.new_transaction(values['sender'], values['recipient'], values['amount'], txid)
+
     response = {'message': f'トランザクションはブロック{index}に追加されました'}
     return jsonify(response), 201
 
@@ -202,22 +244,22 @@ def new_transactions():
 # メソッドはGETで/mineエンドポイントを作る
 @app.route('/mine', methods=['GET'])
 def mine():
-    # 次のプルーフを見つけるためプルーフ・オブ・ワークアルゴリズムを使用する
-    last_block = blockchain.last_block
-    last_proof = last_block['proof']
-    proof = blockchain.proof_of_work(last_proof)
 
+    # コインベーストランザクション
     # プルーフを見つけたことに対する報酬を得る
     # 送信者は、採掘者が新しいコインを採掘したことを表すために"0"とする
     blockchain.new_transaction(
         sender="0",
         recipient=node_identifire,
         amount=1,
+        transaction_id="0"
     )
 
     # チェーンに新しいブロックを加えることで、新しいブロックを採掘する
-    block = blockchain.new_block(proof)
+    block = blockchain.new_block()
 
+
+    last_block = blockchain.last_block
     if last_block['index'] % 5 == 0:
         blockchain.change_difficulty()
 
@@ -225,9 +267,10 @@ def mine():
         'message': '新しいブロックを採掘しました',
         'index': block['index'],
         'transactions': block['transactions'],
-        'proof': block['proof'],
+        'nonce': block['nonce'],
         'timestamp': block['timestamp'],
         'previous_hash': block['previous_hash'],
+        'merkle_root_hash': block['merkle_root_hash']
     }
     return jsonify(response), 200
 
