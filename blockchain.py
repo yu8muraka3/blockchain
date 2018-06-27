@@ -65,7 +65,11 @@ class Blockchain:
 
     def merkle_root(self, nodes):
         nodes = self.extract_txid(nodes)
+        print("----------")
+        print("the number of tx")
         print(len(nodes))
+        print("----------")
+
         if len(nodes) == 1:
             if len(self.current_transactions) == 1:
                 mRoot = self.dhash(nodes[0])
