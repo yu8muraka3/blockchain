@@ -1,0 +1,16 @@
+version: '2'
+services:
+  web:
+    build: .
+    ports:
+     - "5000:5000"
+    volumes:
+     - .:/code
+
+  web2:
+    build: .
+    command: python blockchain.py 5001
+    ports:
+     - "5001:5001"
+    volumes:
+     - .:/code

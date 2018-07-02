@@ -1,11 +1,15 @@
 # coding: UTF-8
 import hashlib
 import json
+import sys
 from time import time
 from uuid import uuid4
 from textwrap import dedent
 from flask import Flask, jsonify, request
 from urllib.parse import urlparse
+import requests
+
+args = sys.argv
 
 class Blockchain:
     def __init__(self):
@@ -187,7 +191,7 @@ class Blockchain:
             if block['previous_hash'] != self.hash(last_block):
                 return False
 
-            if not self.valid_proof(last_block['proof'], block['proof']):
+            if not self.valid_proof(block, block['nonce']):
                 return False
 
             last_block = block
@@ -333,4 +337,4 @@ def consensus():
 
 # port5000でサーバーを起動する
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=args[1])
