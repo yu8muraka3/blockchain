@@ -1,0 +1,30 @@
+version: '2'
+services:
+  node1:
+    build: .
+    ports:
+     - "5000:5000"
+
+     - .:/code
+    networks:
+     blockchain-net:
+      ipv4_address: 172.16.239.2
+
+  node2:
+    build: .
+    ports:
+     - "5000:5000"
+    volumes:
+     - .:/code
+    networks:
+      blockchain-net:
+       ipv4_address: 172.16.239.3
+
+networks:
+ blockchain-net:
+  driver: bridge
+  ipam:
+   driver: default
+   config:
+     - subnet: 172.16.239.0/24
+       gateway: 172.16.239.1
