@@ -337,4 +337,4 @@ def consensus():
 
 # port5000でサーバーを起動する
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=args[1])
+    app.run(port=args[1])

@@ -2,7 +2,9 @@ version: '2'
 services:
   node1:
     build: .
-    volumes:
+    ports:
+     - "5000:5000"
+
      - .:/code
     networks:
      blockchain-net:
@@ -10,6 +12,8 @@ services:
 
   node2:
     build: .
+    ports:
+     - "5000:5000"
     volumes:
      - .:/code
     networks:
